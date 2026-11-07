@@ -11,7 +11,7 @@ RESULTS_DIR="./results/${TIMESTAMP}"
 
 GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; CYAN='\033[0;36m'; NC='\033[0m'
 
-port_of() { for i in "${!ALL[@]}"; do [ "${ALL[$i]}" = "$1" ] && echo $((8001 + i)); done; }
+port_of() { for i in "${!ALL[@]}"; do if [ "${ALL[$i]}" = "$1" ]; then echo $((8001 + i)); fi; done; }
 
 mkdir -p "$RESULTS_DIR"
 chmod -R a+rwX ./results  # k6 container runs as non-root and must write here

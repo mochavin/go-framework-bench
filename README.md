@@ -2,7 +2,51 @@
 
 The same benchmark app as [fpm-vs-swoole-vs-franken](https://github.com/mochavin/fpm-vs-swoole-vs-franken), rewritten in Go and run on five HTTP frameworks. Same endpoints, same Postgres schema, same [k6](https://k6.io/) scenarios, all in Docker Compose.
 
-<!-- RESULTS -->
+## Latest Results (2026-11-07)
+
+Run on the same 4 vCPU Azure VM as the PHP benchmark, with the same k6 scenarios ([test machine](#test-machine)). Raw k6 summaries and the HTML report are in [`benchmarks/2026-11-07_azure-d4as-v6/`](benchmarks/2026-11-07_azure-d4as-v6/).
+
+### Overall
+
+| Metric | stdlib | chi | gin | echo | fiber |
+|---|---:|---:|---:|---:|---:|
+| Total requests | 1,175,373 | 1,211,432 | 1,215,621 | 1,219,796 | **1,254,560** |
+| Throughput (req/s) | 5,772 | 5,957 | 5,978 | 6,000 | **6,170** |
+| Failed requests | 0.00% | 0.00% | 0.00% | 0.00% | 0.00% |
+| Avg latency (ms) | 144.4 | 137.9 | 135.1 | 134.7 | **132.4** |
+| p95 latency (ms) | 290.6 | 254.8 | 259.9 | **244.7** | 271.6 |
+
+### Per scenario: avg / p95 latency (ms)
+
+| Scenario | VUs | stdlib | chi | gin | echo | fiber |
+|---|---:|---:|---:|---:|---:|---:|
+| Health check (no DB) | 5000 | 161 / 346 | 156 / 284 | 149 / 289 | 151 / **284** | **135** / 309 |
+| List 20 posts (DB read) | 1000 ramp | **7.9** / 41.6 | 8.8 / 45.7 | 8.2 / **38.5** | 8.2 / 41.7 | 8.4 / 44.6 |
+| Single post (DB read) | 3000 | 114 / 238 | 104 / 215 | 104 / 210 | **100 / 200** | 106 / 227 |
+| Create post (DB write) | 2000 | 16.1 / 76.9 | 13.6 / **54.7** | 14.3 / 59.5 | **13.1** / 56.5 | 23.8 / 82.5 |
+| Heavy compute (CPU) | 2000 | 2,848 / 8,643 | 2,829 / **5,221** | **2,820** / 7,300 | 2,846 / 8,986 | 2,830 / 5,243 |
+
+### Takeaways
+
+- **The frameworks are within ~7% of each other.** Fiber has the highest throughput (6,170 req/s) and stdlib the lowest (5,772), but the gap is small compared to run-to-run noise on a shared 4 vCPU machine.
+- **The load generator is the bottleneck.** k6 runs 5000 VUs on the same 4 vCPUs as the server and Postgres, so most of the ~150 ms health-check latency is k6 and the kernel, not the framework.
+- **Go vs PHP on the same VM:** every Go framework served ~1.2 M requests with zero failures. The best PHP runtime (FrankenPHP) served 177 k at 771 req/s with 2.1 s average latency, so Go is roughly **8× the throughput** at **~15× lower latency**.
+- **Heavy compute** is CPU-bound everywhere (~2.8 s average under 2000 VUs) and the p95 spread between frameworks is scheduling noise. Go still finishes fibonacci(30) far faster than PHP (~30 s average there).
+- Fiber was slowest on DB writes (23.8 ms avg vs ~14 ms). It runs on fasthttp, which handles request contexts differently from net/http.
+
+### Test machine
+
+| | |
+|---|---|
+| Host | Azure `Standard_D4as_v6` |
+| CPU | AMD EPYC 9V74, 4 vCPU (2 cores × 2 threads) |
+| RAM | 15.6 GiB, no swap |
+| OS | Ubuntu 24.04.5 LTS, kernel 7.0.0-1017-azure |
+| Docker | Engine 29.1.3, Compose 2.40.3 |
+| Go | 1.26 (static binaries, `CGO_ENABLED=0`, distroless image) |
+| Versions | gin 1.12.0, chi 5.5.0, echo 4.16.3, fiber 2.52.16, pgx 5.12.0 |
+| Database | PostgreSQL 16 (alpine), `max_connections=300` |
+| Load generator | k6 v2.3.0, **on the same machine** as the servers |
 
 ## Frameworks
 

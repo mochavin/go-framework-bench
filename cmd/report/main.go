@@ -66,6 +66,9 @@ func main() {
 	var rows []row
 	for _, fw := range frameworks {
 		files, _ := filepath.Glob(filepath.Join(*in, fw+"_*.json"))
+		if _, err := os.Stat(filepath.Join(*in, fw+".json")); err == nil {
+			files = append(files, filepath.Join(*in, fw+".json")) // benchmarks/ naming
+		}
 		if len(files) == 0 {
 			continue
 		}

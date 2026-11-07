@@ -1,0 +1,78 @@
+x-app: &app
+  ulimits:
+    # Default container soft limit is 1024 open files, too low for 5000 VUs.
+    nofile: { soft: 65535, hard: 65535 }
+  depends_on:
+    db:
+      condition: service_healthy
+  restart: unless-stopped
+
+x-env: &env
+  DB_HOST: db
+  DB_PORT: 5432
+  DB_DATABASE: go_bench
+  DB_USERNAME: bench
+  DB_PASSWORD: secret
+  DB_MAX_CONNS: ${DB_MAX_CONNS:-50}
+
+services:
+  db:
+    image: postgres:16-alpine
+    # 5 apps x 50 pool connections each, plus headroom.
+    command: ["postgres", "-c", "max_connections=300"]
+    environment:
+      POSTGRES_DB: go_bench
+      POSTGRES_USER: bench
+      POSTGRES_PASSWORD: secret
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bench -d go_bench"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  app-stdlib:
+    <<: *app
+    build: { context: ., args: { FRAMEWORK: stdlib } }
+    ports: ["8001:8000"]
+    environment: { <<: *env, APP_RUNTIME: stdlib }
+
+  app-chi:
+    <<: *app
+    build: { context: ., args: { FRAMEWORK: chi } }
+    ports: ["8002:8000"]
+    environment: { <<: *env, APP_RUNTIME: chi }
+
+  app-gin:
+    <<: *app
+    build: { context: ., args: { FRAMEWORK: gin } }
+    ports: ["8003:8000"]
+    environment: { <<: *env, APP_RUNTIME: gin }
+
+  app-echo:
+    <<: *app
+    build: { context: ., args: { FRAMEWORK: echo } }
+    ports: ["8004:8000"]
+    environment: { <<: *env, APP_RUNTIME: echo }
+
+  app-fiber:
+    <<: *app
+    build: { context: ., args: { FRAMEWORK: fiber } }
+    ports: ["8005:8000"]
+    environment: { <<: *env, APP_RUNTIME: fiber }
+
+  # k6 load tester (run on demand)
+  k6:
+    image: grafana/k6:latest
+    volumes:
+      - ./k6:/scripts
+      - ./results:/results
+    environment:
+      # Raw per-request output is off by default: it is huge and eats CPU the
+      # servers need. Set K6_OUT=json=/results/raw.json to enable it.
+      K6_OUT: ${K6_OUT:-}
+    profiles: [bench]
+
+volumes:
+  pgdata:

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Go Framework Benchmark</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#f8fafc;--card:#fff;--fg:#0f172a;--muted:#64748b;--line:#e2e8f0}
+@media (prefers-color-scheme:dark){:root{--bg:#0b1120;--card:#111827;--fg:#e5e7eb;--muted:#94a3b8;--line:#1f2937}}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif}
+main{max-width:1100px;margin:auto;padding:24px 16px}
+h1{margin:0 0 4px}.muted{color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:16px 0;overflow-x:auto}
+table{border-collapse:collapse;width:100%}th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+</style></head><body><main>
+<h1>Go Framework Benchmark</h1>
+<p class="muted">net/http vs Chi vs Gin vs Echo vs Fiber · same app, same Postgres, same k6 scenarios · generated 2026-11-07 11:30 UTC</p>
+
+<div class="card"><h2>Overall</h2><table>
+<tr><th>Framework</th><th>Requests</th><th>Req/s</th><th>Failed</th><th>Avg (ms)</th><th>p95 (ms)</th></tr>
+<tr><td><span class="dot" style="background:#00ADD8"></span>stdlib</td>
+<td>1,175,373</td><td>5,772</td><td>0.00%</td><td>144.43</td><td>290.61</td></tr><tr><td><span class="dot" style="background:#8B5CF6"></span>chi</td>
+<td>1,211,432</td><td>5,957</td><td>0.00%</td><td>137.89</td><td>254.76</td></tr><tr><td><span class="dot" style="background:#10B981"></span>gin</td>
+<td>1,215,621</td><td>5,978</td><td>0.00%</td><td>135.08</td><td>259.87</td></tr><tr><td><span class="dot" style="background:#F59E0B"></span>echo</td>
+<td>1,219,796</td><td>6,000</td><td>0.00%</td><td>134.75</td><td>244.73</td></tr><tr><td><span class="dot" style="background:#EF4444"></span>fiber</td>
+<td>1,254,560</td><td>6,170</td><td>0.00%</td><td>132.38</td><td>271.56</td></tr>
+</table><p class="muted">Latency counts successful responses only.</p></div>
+
+<div class="card"><h2>Per scenario: avg / p95 (ms)</h2><table>
+<tr><th>Scenario</th><th>stdlib</th><th>chi</th><th>gin</th><th>echo</th><th>fiber</th></tr>
+<tr><td>Health check (no DB)</td><td>160.93 / 345.46</td><td>155.51 / 284.13</td><td>148.83 / 289.01</td><td>150.72 / 283.96</td><td>134.78 / 308.95</td></tr><tr><td>List 20 posts (DB read)</td><td>7.94 / 41.59</td><td>8.79 / 45.66</td><td>8.16 / 38.47</td><td>8.24 / 41.70</td><td>8.42 / 44.64</td></tr><tr><td>Single post (DB read)</td><td>113.74 / 238.32</td><td>103.98 / 214.84</td><td>103.47 / 209.56</td><td>100.43 / 200.17</td><td>106.21 / 226.90</td></tr><tr><td>Create post (DB write)</td><td>16.13 / 76.93</td><td>13.56 / 54.67</td><td>14.27 / 59.53</td><td>13.08 / 56.48</td><td>23.83 / 82.50</td></tr><tr><td>Heavy compute (CPU)</td><td>2848.31 / 8642.56</td><td>2828.90 / 5221.13</td><td>2819.80 / 7300.07</td><td>2846.26 / 8986.40</td><td>2829.90 / 5243.19</td></tr>
+</table></div>
+
+<div class="card"><h2>Throughput (req/s)</h2><canvas id="rps" height="90"></canvas></div>
+<div class="card"><h2>p95 latency per scenario (ms)</h2><canvas id="p95" height="140"></canvas></div>
+
+<p class="muted">Sources: stdlib.json chi.json gin.json echo.json fiber.json </p>
+</main><script>
+const d = {"labels":["Health check (no DB)","List 20 posts (DB read)","Single post (DB read)","Create post (DB write)","Heavy compute (CPU)"],"rows":[{"Name":"stdlib","Color":"#00ADD8","Source":"stdlib.json","Reqs":1175373,"RPS":5772.150163594805,"Failed":0,"Avg":144.4317434513459,"P95":290.61098199999986,"ScenAvg":[160.92693341124135,7.94387188746331,113.73801741544665,16.131526635162462,2848.308349312951],"ScenP95":[345.4583053999986,41.586123450000024,238.31747365000024,76.93322319999983,8642.55554]},{"Name":"chi","Color":"#8B5CF6","Source":"chi.json","Reqs":1211432,"RPS":5956.898404019301,"Failed":0,"Avg":137.88679980032018,"P95":254.7558744999999,"ScenAvg":[155.5135766040765,8.792678482111398,103.98395704717544,13.559754967134833,2828.8998571343463],"ScenP95":[284.128176,45.66324,214.8427648499997,54.6745685,5221.1347322]},{"Name":"gin","Color":"#10B981","Source":"gin.json","Reqs":1215621,"RPS":5977.9961839098205,"Failed":0,"Avg":135.07734478438894,"P95":259.867948,"ScenAvg":[148.82965352476523,8.159023661876795,103.47322474440179,14.26931088011785,2819.7966181751676],"ScenP95":[289.01376984999996,38.47224980000001,209.56469239999998,59.533983599999985,7300.065768799998]},{"Name":"echo","Color":"#F59E0B","Source":"echo.json","Reqs":1219796,"RPS":5999.693948390985,"Failed":0,"Avg":134.74623093718225,"P95":244.7324165,"ScenAvg":[150.72135167216027,8.238706083709664,100.42664487607031,13.080729799115439,2846.2566482891157],"ScenP95":[283.9580958499999,41.69719435000001,200.17467619999965,56.47806359999997,8986.400180999999]},{"Name":"fiber","Color":"#EF4444","Source":"fiber.json","Reqs":1254560,"RPS":6169.849473887359,"Failed":0,"Avg":132.3828882600891,"P95":271.5600533500001,"ScenAvg":[134.7833544269592,8.423741161077164,106.21126352064488,23.827243739294843,2829.8966226358207],"ScenP95":[308.9469351499999,44.638868,226.9030682,82.50029314999998,5243.192399049998]}]};
+const grid = getComputedStyle(document.documentElement).getPropertyValue('--line');
+const opts = {plugins:{legend:{display:false}},scales:{x:{grid:{color:grid}},y:{grid:{color:grid},beginAtZero:true}}};
+new Chart(rps,{type:'bar',data:{labels:d.rows.map(r=>r.Name),datasets:[{data:d.rows.map(r=>r.RPS),backgroundColor:d.rows.map(r=>r.Color)}]},options:opts});
+new Chart(p95,{type:'bar',data:{labels:d.labels,datasets:d.rows.map(r=>({label:r.Name,data:r.ScenP95,backgroundColor:r.Color}))},
+  options:{...opts,plugins:{legend:{display:true}}}});
+</script></body></html>

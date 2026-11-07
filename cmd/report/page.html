@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Go Framework Benchmark</title>
+<meta name="description" content="net/http vs Chi vs Gin vs Echo vs Fiber under k6 load, with Laravel on PHP-FPM, Swoole and FrankenPHP as a reference.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #f6f7fb; --surface: #ffffff; --surface-2: #f1f3f8; --fg: #0f172a; --muted: #5b6478;
+  --line: #e3e7ef; --accent: #0891b2; --accent-soft: #e0f6fb; --good: #059669; --shadow: 0 1px 2px rgba(15,23,42,.05), 0 8px 24px rgba(15,23,42,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0a0e17; --surface: #111723; --surface-2: #171f2e; --fg: #e7ebf3; --muted: #8b96ab;
+    --line: #232c3d; --accent: #22d3ee; --accent-soft: rgba(34,211,238,.12); --good: #34d399; --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0a0e17; --surface: #111723; --surface-2: #171f2e; --fg: #e7ebf3; --muted: #8b96ab;
+  --line: #232c3d; --accent: #22d3ee; --accent-soft: rgba(34,211,238,.12); --good: #34d399; --shadow: none;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 Inter, system-ui, sans-serif; }
+a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+code, .mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .86em; }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+
+header { padding: 56px 0 28px; }
+.eyebrow { display: inline-flex; gap: 8px; align-items: center; font-size: 13px; color: var(--accent); background: var(--accent-soft); padding: 4px 12px; border-radius: 999px; font-weight: 500; }
+h1 { font-size: clamp(30px, 5vw, 48px); line-height: 1.1; margin: 16px 0 12px; letter-spacing: -.02em; font-weight: 800; }
+h1 span { color: var(--accent); }
+.lede { color: var(--muted); font-size: 17px; max-width: 720px; margin: 0; }
+.links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); font-weight: 500; font-size: 14px; }
+.btn:hover { border-color: var(--accent); text-decoration: none; }
+.btn svg { width: 16px; height: 16px; }
+
+section { margin: 40px 0; }
+h2 { font-size: 22px; margin: 0 0 6px; letter-spacing: -.01em; }
+.sub { color: var(--muted); margin: 0 0 18px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; box-shadow: var(--shadow); }
+
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.stat .k { color: var(--muted); font-size: 13px; font-weight: 500; }
+.stat .v { font-size: 28px; font-weight: 700; letter-spacing: -.02em; margin-top: 4px; }
+.stat .n { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+.fw-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+.fw { position: relative; overflow: hidden; }
+.fw::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--c); }
+.fw .name { font-weight: 700; font-size: 17px; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.fw .detail { color: var(--muted); font-size: 12.5px; margin-bottom: 14px; }
+.fw .big { font-size: 26px; font-weight: 700; letter-spacing: -.02em; }
+.fw .unit { color: var(--muted); font-size: 13px; font-weight: 500; }
+.fw dl { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line); }
+.fw dt { color: var(--muted); font-size: 12px; } .fw dd { margin: 0; font-weight: 600; font-size: 14px; }
+.badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
+
+.chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+.chart-head h3 { margin: 0; font-size: 16px; }
+.seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+.seg button { border: 0; background: transparent; color: var(--muted); font: 500 13px Inter, sans-serif; padding: 5px 12px; border-radius: 7px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.chart { position: relative; height: 340px; }
+.chart.tall { height: 400px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 10px 12px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
+th:first-child, td:first-child { text-align: left; }
+tr:last-child td { border-bottom: 0; }
+td.best { color: var(--good); font-weight: 700; }
+tr.php td { color: var(--muted); }
+tr.group td { background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; padding: 6px 12px; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; vertical-align: 1px; }
+.p95 { color: var(--muted); font-size: 12.5px; }
+
+.takeaways { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+.takeaways .card h3 { margin: 0 0 6px; font-size: 15px; }
+.takeaways .card p { margin: 0; color: var(--muted); }
+
+.meta { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.meta .card { overflow-x: auto; }
+.meta table td:first-child { color: var(--muted); }
+.meta table td { text-align: left; white-space: normal; }
+ul.notes { margin: 0; padding-left: 18px; color: var(--muted); } ul.notes li { margin: 6px 0; }
+
+footer { color: var(--muted); font-size: 13px; padding: 32px 0 56px; border-top: 1px solid var(--line); margin-top: 56px; }
+
+@media (max-width: 960px) {
+  .fw-grid { grid-template-columns: repeat(2, 1fr); }
+  .stats { grid-template-columns: repeat(2, 1fr); }
+  .two, .meta, .takeaways { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  header { padding-top: 36px; }
+  .fw-grid { grid-template-columns: 1fr; }
+  .stat .v { font-size: 22px; }
+  .chart { height: 300px; } .chart.tall { height: 360px; }
+  .card { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="eyebrow" id="date-chip"></span>
+    <h1>Go framework benchmark: <span>net/http, Chi, Gin, Echo, Fiber</span></h1>
+    <p class="lede">The same API on five Go HTTP frameworks, driven by the same k6 load test as the
+      <a href="https://mochavin.github.io/fpm-vs-swoole-vs-franken/">Laravel FPM vs Swoole vs FrankenPHP</a>
+      benchmark, on the same machine.</p>
+    <div class="links">
+      <a class="btn" href="https://github.com/mochavin/go-framework-bench">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"/></svg>
+        Source on GitHub</a>
+      <a class="btn" href="https://github.com/mochavin/go-framework-bench/tree/main/benchmarks">Raw k6 summaries</a>
+      <a class="btn" href="https://mochavin.github.io/fpm-vs-swoole-vs-franken/">PHP runtime results</a>
+    </div>
+  </header>
+
+  <section>
+    <div class="stats" id="stats"></div>
+  </section>
+
+  <section>
+    <h2>Frameworks</h2>
+    <p class="sub">Whole run, all five scenarios combined. Latency counts successful responses only.</p>
+    <div class="fw-grid" id="fw-cards"></div>
+  </section>
+
+  <section>
+    <h2>Takeaways</h2>
+    <p class="sub">What the numbers say, and what they don't.</p>
+    <div class="takeaways" id="takeaways"></div>
+  </section>
+
+  <section>
+    <div class="card">
+      <div class="chart-head">
+        <h3>Throughput (requests per second)</h3>
+        <div class="seg" id="rps-toggle" role="group" aria-label="Runtimes shown">
+          <button aria-pressed="true" data-v="go">Go only</button>
+          <button aria-pressed="false" data-v="all">Go + PHP</button>
+        </div>
+      </div>
+      <div class="chart"><canvas id="rps-chart" aria-label="Throughput chart"></canvas></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="card">
+      <div class="chart-head">
+        <h3>Latency per scenario <span class="p95">(ms, log scale)</span></h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div class="seg" id="lat-metric" role="group" aria-label="Latency metric">
+            <button aria-pressed="true" data-v="avg">Average</button>
+            <button aria-pressed="false" data-v="p95">p95</button>
+          </div>
+          <div class="seg" id="lat-php" role="group" aria-label="Include PHP">
+            <button aria-pressed="true" data-v="go">Go only</button>
+            <button aria-pressed="false" data-v="all">Go + PHP</button>
+          </div>
+        </div>
+      </div>
+      <div class="chart tall"><canvas id="lat-chart" aria-label="Latency per scenario chart"></canvas></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Per scenario</h2>
+    <p class="sub">Average latency in ms, with p95 below. Green marks the best Go framework in each row.</p>
+    <div class="card table-wrap"><table id="scen-table"></table></div>
+  </section>
+
+  <section>
+    <h2>Overall, with PHP for reference</h2>
+    <p class="sub">The PHP runtimes ran Laravel 12 on the same VM, with the same k6 script and database schema.</p>
+    <div class="card table-wrap"><table id="overall-table"></table></div>
+  </section>
+
+  <section>
+    <h2>How it was run</h2>
+    <p class="sub">Everything runs in Docker Compose on one VM. Frameworks are benchmarked one at a time.</p>
+    <div class="meta">
+      <div class="card">
+        <h3 style="margin:0 0 8px;font-size:15px">k6 scenarios</h3>
+        <div class="table-wrap"><table>
+          <tr><th>Scenario</th><th>Endpoint</th><th>VUs</th><th>Duration</th></tr>
+          <tr><td>Health check</td><td><code>GET /api/health</code></td><td>5000</td><td>30s</td></tr>
+          <tr><td>List 20 posts</td><td><code>GET /api/posts</code></td><td>1000→500→1000→0</td><td>60s</td></tr>
+          <tr><td>Single post</td><td><code>GET /api/posts/{id}</code></td><td>3000</td><td>30s</td></tr>
+          <tr><td>Create post</td><td><code>POST /api/posts</code></td><td>2000</td><td>30s</td></tr>
+          <tr><td>Heavy compute</td><td><code>GET /api/heavy</code></td><td>2000</td><td>30s</td></tr>
+        </table></div>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px;font-size:15px">Test machine</h3>
+        <table>
+          <tr><td>Host</td><td>Azure <code>Standard_D4as_v6</code></td></tr>
+          <tr><td>CPU</td><td>AMD EPYC 9V74, 4 vCPU</td></tr>
+          <tr><td>RAM</td><td>15.6 GiB, no swap</td></tr>
+          <tr><td>OS</td><td>Ubuntu 24.04.5, kernel 7.0</td></tr>
+          <tr><td>Go</td><td>1.26, static binaries, distroless image</td></tr>
+          <tr><td>Database</td><td>PostgreSQL 16, pgx pool of 50 per app</td></tr>
+          <tr><td>Load</td><td>k6 v2.3.0 on the same machine</td></tr>
+        </table>
+      </div>
+      <div class="card" style="grid-column:1/-1">
+        <h3 style="margin:0 0 8px;font-size:15px">Fairness notes</h3>
+        <ul class="notes">
+          <li>DB access, validation and the CPU workload live in one shared package. Each framework only wires routes, parses bodies and renders JSON.</li>
+          <li>No request logging on any framework. Every container gets a 65535 open-file limit.</li>
+          <li>The <code>posts</code> table is reset to the same 100 seeded rows before each framework runs.</li>
+          <li>k6, Postgres and the server share the same 4 vCPUs, so absolute numbers are lower than on a dedicated setup. The comparison is still like for like.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Generated by <code>go run ./cmd/report</code> from the k6 summaries in
+    <a href="https://github.com/mochavin/go-framework-bench">mochavin/go-framework-bench</a>.
+    <span id="sources"></span>
+  </footer>
+</div>
+
+<script>
+// Wrapped in a function: top-level names like `top` clash with window globals.
+(() => {
+const D = /*DATA*/null;
+const GO = D.go, PHP = D.php || [], SC = D.scenarios;
+const $ = (id) => document.getElementById(id);
+const fmt = (v, d = 0) => v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+const ms = (v) => v >= 1000 ? fmt(v) : v >= 100 ? fmt(v) : fmt(v, 1);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
+
+$('date-chip').textContent = `Run ${D.date} · Azure D4as_v6 · 4 vCPU`;
+
+// Headline numbers
+const byRps = [...GO].sort((a, b) => b.rps - a.rps);
+const leader = byRps[0], low = byRps[byRps.length - 1];
+const franken = PHP.find((r) => r.key === 'franken');
+const goRps = mean(GO.map((r) => r.rps)), goAvg = mean(GO.map((r) => r.avg));
+const stats = [
+  { k: 'Highest throughput', v: `${fmt(leader.rps)} req/s`, n: leader.label },
+  { k: 'Spread across Go frameworks', v: `${fmt((leader.rps / low.rps - 1) * 100, 1)}%`, n: `${low.label} → ${leader.label}` },
+  { k: 'Failed requests', v: `${fmt(Math.max(...GO.map((r) => r.failed)), 2)}%`, n: `${fmt(GO.reduce((s, r) => s + r.reqs, 0) / 1e6, 1)} M requests total` },
+];
+if (franken) stats.push({ k: 'Go vs best PHP (FrankenPHP)', v: `${fmt(goRps / franken.rps, 1)}×`, n: `throughput, ${fmt(franken.avg / goAvg)}× lower avg latency` });
+$('stats').innerHTML = stats.map((s) => `<div class="card stat"><div class="k">${s.k}</div><div class="v">${s.v}</div><div class="n">${esc(s.n)}</div></div>`).join('');
+
+// Framework cards
+const bestAvg = Math.min(...GO.map((r) => r.avg)), bestP95 = Math.min(...GO.map((r) => r.p95));
+$('fw-cards').innerHTML = GO.map((r) => {
+  const badges = [];
+  if (r === leader) badges.push('Top req/s');
+  if (r.avg === bestAvg && r !== leader) badges.push('Lowest avg');
+  if (r.p95 === bestP95) badges.push('Lowest p95');
+  return `<div class="card fw" style="--c:${r.color}">
+    <div class="name">${esc(r.label)} ${badges.length ? `<span class="badge">${badges[0]}</span>` : ''}</div>
+    <div class="detail">${esc(r.detail)}</div>
+    <div class="big">${fmt(r.rps)} <span class="unit">req/s</span></div>
+    <dl><div><dt>Avg</dt><dd>${ms(r.avg)} ms</dd></div><div><dt>p95</dt><dd>${ms(r.p95)} ms</dd></div>
+    <div><dt>Requests</dt><dd>${fmt(r.reqs / 1e6, 2)} M</dd></div><div><dt>Failed</dt><dd>${fmt(r.failed, 2)}%</dd></div></dl>
+  </div>`;
+}).join('');
+
+// Takeaways
+const w = SC.findIndex((s) => s.key === 'write_posts');
+const writeSorted = [...GO].sort((a, b) => b.scenAvg[w] - a.scenAvg[w]);
+const tk = [
+  ['The frameworks are close', `${leader.label} served the most requests (${fmt(leader.rps)} req/s) and ${low.label} the fewest (${fmt(low.rps)} req/s): a ${fmt((leader.rps / low.rps - 1) * 100, 1)}% gap, small next to run-to-run noise on a shared 4 vCPU VM.`],
+  ['The load generator is the bottleneck', 'k6 runs 5000 virtual users on the same 4 vCPUs as the server and Postgres. Most of the ~150 ms health-check latency is k6 and the kernel, not the framework.'],
+  ['Heavy compute is CPU-bound everywhere', 'fibonacci(30) under 2000 users saturates every core, so all five land at about 2.8 s average. The p95 differences here are scheduling noise.'],
+  ['DB writes', `${writeSorted[0].label} was slowest creating posts (${ms(writeSorted[0].scenAvg[w])} ms avg vs ${ms(writeSorted[writeSorted.length - 1].scenAvg[w])} ms for ${writeSorted[writeSorted.length - 1].label}).`],
+];
+if (franken) tk.splice(1, 0, ['Go vs PHP on the same VM', `Every Go framework served over 1.1 M requests with zero failures. The fastest PHP runtime, FrankenPHP, served ${fmt(franken.reqs)} at ${fmt(franken.rps)} req/s with ${fmt(franken.avg)} ms average latency.`]);
+$('takeaways').innerHTML = tk.map(([h, p]) => `<div class="card"><h3>${h}</h3><p>${esc(p)}</p></div>`).join('');
+
+// Per-scenario table
+{
+  let h = `<tr><th>Scenario</th><th>VUs</th>${GO.map((r) => `<th><span class="dot" style="background:${r.color}"></span>${esc(r.label)}</th>`).join('')}${franken ? '<th>FrankenPHP</th>' : ''}</tr>`;
+  SC.forEach((s, i) => {
+    const best = Math.min(...GO.map((r) => r.scenAvg[i]));
+    h += `<tr><td>${s.label}</td><td>${s.vus}</td>${GO.map((r) => `<td class="${r.scenAvg[i] === best ? 'best' : ''}">${ms(r.scenAvg[i])}<div class="p95">p95 ${ms(r.scenP95[i])}</div></td>`).join('')}`
+      + (franken ? `<td class="p95">${ms(franken.scenAvg[i])}<div class="p95">p95 ${ms(franken.scenP95[i])}</div></td>` : '') + '</tr>';
+  });
+  $('scen-table').innerHTML = h;
+}
+
+// Overall table
+{
+  const best = (k, lowWins) => (lowWins ? Math.min : Math.max)(...GO.map((r) => r[k]));
+  const b = { reqs: best('reqs'), rps: best('rps'), avg: best('avg', 1), p95: best('p95', 1) };
+  const line = (r, php) => `<tr class="${php ? 'php' : ''}"><td><span class="dot" style="background:${r.color}"></span>${esc(r.label)} <span class="p95">${esc(r.detail)}</span></td>
+    <td class="${!php && r.reqs === b.reqs ? 'best' : ''}">${fmt(r.reqs)}</td><td class="${!php && r.rps === b.rps ? 'best' : ''}">${fmt(r.rps)}</td>
+    <td>${fmt(r.failed, 2)}%</td><td class="${!php && r.avg === b.avg ? 'best' : ''}">${ms(r.avg)}</td><td class="${!php && r.p95 === b.p95 ? 'best' : ''}">${ms(r.p95)}</td></tr>`;
+  let h = '<tr><th>Runtime</th><th>Requests</th><th>Req/s</th><th>Failed</th><th>Avg (ms)</th><th>p95 (ms)</th></tr>';
+  h += '<tr class="group"><td colspan="6">Go</td></tr>' + GO.map((r) => line(r, false)).join('');
+  if (PHP.length) h += '<tr class="group"><td colspan="6">PHP · Laravel 12 (reference)</td></tr>' + PHP.map((r) => line(r, true)).join('');
+  $('overall-table').innerHTML = h;
+}
+
+$('sources').textContent = 'Sources: ' + [...GO, ...PHP].map((r) => r.source).join(', ');
+
+// Charts
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const charts = {};
+function theme() {
+  Chart.defaults.color = css('--muted');
+  Chart.defaults.borderColor = css('--line');
+  Chart.defaults.font.family = 'Inter, system-ui, sans-serif';
+}
+function rowsFor(mode) { return mode === 'all' ? [...GO, ...PHP] : GO; }
+
+function drawRps(mode) {
+  const rows = rowsFor(mode).slice().sort((a, b) => b.rps - a.rps);
+  charts.rps?.destroy();
+  charts.rps = new Chart($('rps-chart'), {
+    type: 'bar',
+    data: { labels: rows.map((r) => r.label), datasets: [{ data: rows.map((r) => r.rps), backgroundColor: rows.map((r) => r.color), borderRadius: 6, maxBarThickness: 34 }] },
+    options: {
+      indexAxis: 'y', maintainAspectRatio: false, animation: { duration: 300 },
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => ` ${fmt(c.raw)} req/s` } } },
+      scales: { x: { beginAtZero: true, ticks: { callback: (v) => fmt(v) } }, y: { grid: { display: false } } },
+    },
+  });
+}
+
+function drawLat(metric, mode) {
+  const rows = rowsFor(mode);
+  charts.lat?.destroy();
+  charts.lat = new Chart($('lat-chart'), {
+    type: 'bar',
+    data: {
+      labels: SC.map((s) => s.label),
+      datasets: rows.map((r) => ({ label: r.label, data: metric === 'avg' ? r.scenAvg : r.scenP95, backgroundColor: r.color, borderRadius: 4 })),
+    },
+    options: {
+      maintainAspectRatio: false, animation: { duration: 300 },
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: 'circle' } },
+        tooltip: { callbacks: { label: (c) => ` ${c.dataset.label}: ${ms(c.raw)} ms` } },
+      },
+      scales: {
+        y: { type: 'logarithmic', ticks: { callback: (v) => [1, 10, 100, 1000, 10000, 100000].includes(v) ? (v >= 1000 ? `${v / 1000}s` : `${v}ms`) : '' } },
+        x: { grid: { display: false } },
+      },
+    },
+  });
+}
+
+const state = { rps: 'go', metric: 'avg', lat: 'go' };
+function seg(id, key, redraw) {
+  const el = $(id);
+  if (!PHP.length && (id === 'rps-toggle' || id === 'lat-php')) { el.style.display = 'none'; return; }
+  el.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    el.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    state[key] = b.dataset.v; redraw();
+  });
+}
+const redrawRps = () => drawRps(state.rps);
+const redrawLat = () => drawLat(state.metric, state.lat);
+seg('rps-toggle', 'rps', redrawRps);
+seg('lat-metric', 'metric', redrawLat);
+seg('lat-php', 'lat', redrawLat);
+
+function drawAll() { theme(); redrawRps(); redrawLat(); }
+if (window.Chart) drawAll();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => window.Chart && drawAll());
+})();
+</script>
+</body>
+</html>

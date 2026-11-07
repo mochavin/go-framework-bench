@@ -1,5 +1,7 @@
 # Go Framework Benchmark: net/http vs Chi vs Gin vs Echo vs Fiber
 
+**Results page:** https://mochavin.github.io/go-framework-bench/
+
 The same benchmark app as [fpm-vs-swoole-vs-franken](https://github.com/mochavin/fpm-vs-swoole-vs-franken), rewritten in Go and run on five HTTP frameworks. Same endpoints, same Postgres schema, same [k6](https://k6.io/) scenarios, all in Docker Compose.
 
 ## Latest Results (2026-11-07)
@@ -100,6 +102,15 @@ Rebuild the report from `results/`:
 docker run --rm -v "$PWD:/src" -w /src golang:1.26-alpine go run ./cmd/report
 ```
 
+Flags: `-in <dir>` (k6 summaries), `-php <dir>` (PHP summaries to show as a reference), `-date`, `-out`. The published page is built with:
+
+```bash
+d=benchmarks/2026-11-07_azure-d4as-v6
+go run ./cmd/report -in $d -php $d/php -date 2026-11-07 -out $d/benchmark-report.html
+```
+
+GitHub Pages serves the `result` branch, whose `index.html` is a copy of that report.
+
 ## Endpoints
 
 Same as the Laravel version, with the same JSON shapes.
@@ -139,7 +150,7 @@ Latency counts successful responses only (`http_req_duration{expected_response:t
 ```
 ├── cmd/
 │   ├── stdlib/ chi/ gin/ echo/ fiber/   # one main.go per framework
-│   └── report/                          # builds benchmark-report.html
+│   └── report/                          # builds the results page (page.html template)
 ├── internal/app/app.go                  # shared DB, validation, workload
 ├── k6/benchmark.js, smoke.js
 ├── benchmarks/                          # committed result summaries
